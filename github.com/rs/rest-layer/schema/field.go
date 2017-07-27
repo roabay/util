@@ -49,8 +49,8 @@ type Field struct {
 	// @see http://research.swtch.com/interfaces for more details.
 	Validator FieldValidator
 	// Dependency rejects the field if the schema query doesn't match the document.
-	// Use schema.Q(`{"field": "value"}`) to populate this field.
-	Dependency *PreQuery
+	// Use query.MustParse(`{"field": "value"}`) to populate this field.
+	Dependency Query
 	// Filterable defines that the field can be used with the `filter` parameter.
 	// When this property is set to `true`, you may want to ensure the backend
 	// database has this field indexed.
@@ -66,34 +66,46 @@ type Field struct {
 // FieldHandler is the piece of logic modifying the field value based on passed parameters
 type FieldHandler func(ctx context.Context, value interface{}, params map[string]interface{}) (interface{}, error)
 
-// FieldValidator is an interface for all individual validators. It takes a value
-// to validate as argument and returned the normalized value or an error if validation failed.
+// FieldValidator is an interface for all individual validators. It takes a
+// value to validate as argument and returned the normalized value or an error
+// if validation failed.
 type FieldValidator interface {
 	Validate(value interface{}) (interface{}, error)
 }
 
-// FieldSerializer is used to convert the value between it's representation form and it
-// internal storable form. A FieldValidator which implement this interface will have its
-// Serialize method called before marshaling.
+//FieldValidatorFunc is an adapter to allow the use of ordinary functions as field validators.
+// If f is a function with the appropriate signature, FieldValidatorFunc(f) is a FieldValidator
+// that calls f.
+type FieldValidatorFunc func(value interface{}) (interface{}, error)
+
+// Validate calls f(value).
+func (f FieldValidatorFunc) Validate(value interface{}) (interface{}, error) {
+	return f(value)
+}
+
+// FieldSerializer is used to convert the value between it's representation form
+// and it internal storable form. A FieldValidator which implement this
+// interface will have its Serialize method called before marshaling.
 type FieldSerializer interface {
-	// Serialize is called when the data is coming from it internal storable form and
-	// needs to be prepared for representation (i.e.: just before JSON marshaling)
+	// Serialize is called when the data is coming from it internal storable
+	// form and needs to be prepared for representation (i.e.: just before JSON
+	// marshaling).
 	Serialize(value interface{}) (interface{}, error)
 }
 
-// Compile implements Compiler interface and recusively compile sub schemas and validators
-// when they implement Compiler interface
-func (f Field) Compile() error {
-	// TODO check field name format (alpha num + _ and -)
+// Compile implements the ReferenceCompiler interface and recursively compile sub schemas
+// and validators when they implement Compiler interface.
+func (f Field) Compile(rc ReferenceChecker) error {
+	// TODO check field name format (alpha num + _ and -).
 	if f.Schema != nil {
-		// Recusively compile sub schema if any
-		if err := f.Schema.Compile(); err != nil {
+		// Recursively compile sub schema if any.
+		if err := f.Schema.Compile(rc); err != nil {
 			return fmt.Errorf(".%v", err)
 		}
 	} else if f.Validator != nil {
-		// Compile validator if it implements Compiler interface
+		// Compile validator if it implements the ReferenceCompiler or Compiler interface.
 		if c, ok := f.Validator.(Compiler); ok {
-			if err := c.Compile(); err != nil {
+			if err := c.Compile(rc); err != nil {
 				return fmt.Errorf(": %v", err)
 			}
 		}

@@ -9,12 +9,11 @@ import (
 
 	"github.com/graphql-go/graphql"
 	"github.com/rs/rest-layer/resource"
-	"github.com/rs/rest-layer/schema"
 )
 
 func newRootQuery(idx resource.Index) *graphql.Object {
 	t := types{}
-	if c, ok := idx.(schema.Compiler); ok {
+	if c, ok := idx.(resource.Compiler); ok {
 		if err := c.Compile(); err != nil {
 			log.Fatal(err)
 		}
@@ -82,7 +81,7 @@ var listArgs = graphql.FieldConfigArgument{
 func listParamResolver(r *resource.Resource, p graphql.ResolveParams, params url.Values) (lookup *resource.Lookup, offset int, limit int, err error) {
 	skip := 0
 	page := 1
-	// Default value on non HEAD request for limit is -1 (pagination disabled)
+	// Default value on non HEAD request for limit is -1 (pagination disabled).
 	limit = -1
 
 	if l := r.Conf().PaginationDefaultLimit; l > 0 {
@@ -98,7 +97,7 @@ func listParamResolver(r *resource.Resource, p graphql.ResolveParams, params url
 		limit = i
 	}
 	if page != 1 && limit == -1 {
-		return nil, 0, 0, errors.New("cannot use `page' parameter with no `limit' paramter on a resource with no default pagination size")
+		return nil, 0, 0, errors.New("cannot use `page' parameter with no `limit' parameter on a resource with no default pagination size")
 	}
 	offset = (page-1)*limit + skip
 	lookup = resource.NewLookup()

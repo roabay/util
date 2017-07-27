@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/rs/rest-layer/resource"
-	"github.com/rs/rest-layer/schema"
 )
 
-// getMethodHandler returns the method handler for a given HTTP method in item or resource mode.
+// getMethodHandler returns the method handler for a given HTTP method in item
+// or resource mode.
 func getMethodHandler(isItem bool, method string) methodHandler {
 	if isItem {
 		switch method {
@@ -43,7 +43,7 @@ func getMethodHandler(isItem bool, method string) methodHandler {
 	return nil
 }
 
-// isMethodAllowed returns true if the method is allowed by the configuration
+// isMethodAllowed returns true if the method is allowed by the configuration.
 func isMethodAllowed(isItem bool, method string, conf resource.Conf) bool {
 	if isItem {
 		switch method {
@@ -73,8 +73,8 @@ func isMethodAllowed(isItem bool, method string, conf resource.Conf) bool {
 	return false
 }
 
-// getAllowedMethodHandler returns the method handler for the requested method if the resource configuration
-// allows it.
+// getAllowedMethodHandler returns the method handler for the requested method
+// if the resource configuration allows it.
 func getAllowedMethodHandler(isItem bool, method string, conf resource.Conf) methodHandler {
 	if isMethodAllowed(isItem, method, conf) {
 		return getMethodHandler(isItem, method)
@@ -118,10 +118,11 @@ func setAllowHeader(headers http.Header, isItem bool, conf resource.Conf) {
 	}
 }
 
-// compareEtag compares a client provided etag with a base etag. The client provided
-// etag may or may not have quotes while the base etag is never quoted. This loose
-// comparison of etag allows clients not stricly respecting RFC to send the etag with
-// or without quotes when the etag comes from, for instance, the API JSON response.
+// compareEtag compares a client provided etag with a base etag. The client
+// provided etag may or may not have quotes while the base etag is never quoted.
+// This loose comparison of etag allows clients not strictly respecting RFC to
+// send the etag with or without quotes when the etag comes from, for instance,
+// the API JSON response.
 func compareEtag(etag, baseEtag string) bool {
 	if etag == "" {
 		return false
@@ -135,7 +136,7 @@ func compareEtag(etag, baseEtag string) bool {
 	return false
 }
 
-// decodePayload decodes the payload from the provided request
+// decodePayload decodes the payload from the provided request.
 func decodePayload(r *http.Request, payload *map[string]interface{}) *Error {
 	// Check content-type, if not specified, assume it's JSON and fail later
 	if ct := r.Header.Get("Content-Type"); ct != "" && strings.TrimSpace(strings.SplitN(ct, ";", 2)[0]) != "application/json" {
@@ -149,8 +150,9 @@ func decodePayload(r *http.Request, payload *map[string]interface{}) *Error {
 	return nil
 }
 
-// checkIntegrityRequest ensures that orignal item exists and complies with conditions
-// expressed by If-Match and/or If-Unmodified-Since headers if present.
+// checkIntegrityRequest ensures that original item exists and complies with
+// conditions expressed by If-Match and/or If-Unmodified-Since headers if
+// present.
 func checkIntegrityRequest(r *http.Request, original *resource.Item) *Error {
 	ifMatch := r.Header.Get("If-Match")
 	ifUnmod := r.Header.Get("If-Unmodified-Since")
@@ -167,44 +169,6 @@ func checkIntegrityRequest(r *http.Request, original *resource.Item) *Error {
 			} else if original.Updated.Truncate(time.Second).After(ifUnmodTime) {
 				// Item's update time is truncated to the second because RFC1123 doesn't support more
 				return ErrPreconditionFailed
-			}
-		}
-	}
-	return nil
-}
-
-// checkReferences ensures that fields with the Reference validator reference an existing object
-func checkReferences(ctx context.Context, payload map[string]interface{}, s schema.Validator) *Error {
-	for name, value := range payload {
-		field := s.GetField(name)
-		if field == nil {
-			continue
-		}
-		// Check reference if validator is of type Reference
-		if field.Validator != nil {
-			if ref, ok := field.Validator.(*schema.Reference); ok {
-				router, ok := IndexFromContext(ctx)
-				if !ok {
-					return &Error{500, "Router not available in context", nil}
-				}
-				rsrc, found := router.GetResource(ref.Path, nil)
-				if !found {
-					return &Error{500, fmt.Sprintf("Invalid resource reference for field `%s': %s", name, ref.Path), nil}
-				}
-				_, err := rsrc.Get(ctx, value)
-				if err == resource.ErrNotFound {
-					return &Error{404, fmt.Sprintf("Resource reference not found for field `%s'", name), nil}
-				} else if err != nil {
-					return &Error{500, fmt.Sprintf("Error fetching resource reference for field `%s': %v", name, err), nil}
-				}
-			}
-		}
-		// Check sub-schema if any
-		if field.Schema != nil && value != nil {
-			if subPayload, ok := value.(map[string]interface{}); ok {
-				if err := checkReferences(ctx, subPayload, field.Schema); err != nil {
-					return err
-				}
 			}
 		}
 	}

@@ -9,17 +9,19 @@ import (
 	"sync"
 
 	"github.com/rs/rest-layer/resource"
-	"github.com/rs/rest-layer/schema"
+	"github.com/rs/rest-layer/schema/query"
 )
 
-// RouteMatch represent a REST request's matched resource with the method to apply and its parameters
+// RouteMatch represent a REST request's matched resource with the method to
+// apply and its parameters.
 type RouteMatch struct {
 	// Method is the HTTP method used on the resource.
 	Method string
-	// ResourcePath is the list of intermediate resources followed by the targeted resource.
-	// Each intermediate resource mutch match all the previous resource components of this path
-	// and newly created resources will have their corresponding fields filled with resource
-	// path information (resource.field => resource.value).
+	// ResourcePath is the list of intermediate resources followed by the
+	// targeted resource. Each intermediate resource much match all the previous
+	// resource components of this path and newly created resources will have
+	// their corresponding fields filled with resource path information
+	// (resource.field => resource.value).
 	ResourcePath ResourcePath
 	// Params is the list of client provided parameters (thru query-string or alias).
 	Params url.Values
@@ -32,7 +34,13 @@ const (
 	indexKey
 )
 
-var routePool = sync.Pool{}
+var routePool = sync.Pool{
+	New: func() interface{} {
+		return &RouteMatch{
+			ResourcePath: make(ResourcePath, 0, 2),
+		}
+	},
+}
 
 var errResourceNotFound = &Error{http.StatusNotFound, "Resource Not Found", nil}
 
@@ -44,26 +52,21 @@ func contextWithIndex(ctx context.Context, index resource.Index) context.Context
 	return context.WithValue(ctx, indexKey, index)
 }
 
-// RouteFromContext extracts the matched route from the given net/context
+// RouteFromContext extracts the matched route from the given net/context.
 func RouteFromContext(ctx context.Context) (*RouteMatch, bool) {
 	route, ok := ctx.Value(routeKey).(*RouteMatch)
 	return route, ok
 }
 
-// IndexFromContext extracts the router from the given net/context
+// IndexFromContext extracts the router from the given net/context.
 func IndexFromContext(ctx context.Context) (resource.Index, bool) {
 	index, ok := ctx.Value(indexKey).(resource.Index)
 	return index, ok
 }
 
-// FindRoute returns the REST route for the given request
+// FindRoute returns the REST route for the given request.
 func FindRoute(index resource.Index, req *http.Request) (*RouteMatch, error) {
-	route, ok := routePool.Get().(*RouteMatch)
-	if !ok {
-		route = &RouteMatch{
-			ResourcePath: make(ResourcePath, 0, 2),
-		}
-	}
+	route := routePool.Get().(*RouteMatch)
 	route.Method = req.Method
 	if req.URL.RawQuery != "" {
 		route.Params = req.URL.Query()
@@ -76,9 +79,9 @@ func FindRoute(index resource.Index, req *http.Request) (*RouteMatch, error) {
 	return route, err
 }
 
-// findRoute recursively route a (sub)resource request
+// findRoute recursively route a (sub)resource request.
 func findRoute(path string, index resource.Index, route *RouteMatch) error {
-	// Extract the first component of the path
+	// Extract the first component of the path.
 	var name string
 	name, path = nextPathComponent(path)
 
@@ -88,24 +91,24 @@ func findRoute(path string, index resource.Index, route *RouteMatch) error {
 	}
 
 	if rsrc, found := index.GetResource(resourcePath, nil); found {
-		// First component must match a resource
+		// First component must match a resource.
 		if len(path) >= 1 {
-			// If there are some components left, the path targets an item or an alias
+			// If there are some components left, the path targets an item or an alias.
 
-			// Shift the item id from the path components
+			// Shift the item id from the path components.
 			var id string
 			id, path = nextPathComponent(path)
 
-			// Handle sub-resources (/resource1/id1/resource2/id2)
+			// Handle sub-resources (/resource1/id1/resource2/id2).
 			if len(path) >= 1 {
 				subPathComp, _ := nextPathComponent(path)
 				subResourcePath := resourcePath + "." + subPathComp
 				if subResource, found := index.GetResource(subResourcePath, nil); found {
-					// Append the intermediate resource path
+					// Append the intermediate resource path.
 					if err := route.ResourcePath.append(rsrc, subResource.ParentField(), id, name); err != nil {
 						return err
 					}
-					// Recurse to match the sub-path
+					// Recurse to match the sub-path.
 					if err := findRoute(path, index, route); err != nil {
 						return err
 					}
@@ -116,20 +119,20 @@ func findRoute(path string, index resource.Index, route *RouteMatch) error {
 				return nil
 			}
 
-			// Handle aliases (/resource/alias or /resource1/id1/resource2/alias)
+			// Handle aliases (/resource/alias or /resource1/id1/resource2/alias).
 			if alias, found := rsrc.GetAlias(id); found {
-				// Apply aliases query to the request
+				// Apply aliases query to the request.
 				for key, values := range alias {
 					for _, value := range values {
 						route.Params.Add(key, value)
 					}
 				}
 			} else {
-				// Set the id route field
+				// Set the id route field.
 				return route.ResourcePath.append(rsrc, "id", id, name)
 			}
 		}
-		// Set the collection resource
+		// Set the collection resource.
 		return route.ResourcePath.append(rsrc, "", nil, name)
 	}
 	route.ResourcePath.clear()
@@ -156,8 +159,8 @@ func nextPathComponent(path string) (string, string) {
 	return comp, path
 }
 
-// Resource returns the last resource path's resource
-func (r RouteMatch) Resource() *resource.Resource {
+// Resource returns the last resource path's resource.
+func (r *RouteMatch) Resource() *resource.Resource {
 	l := len(r.ResourcePath)
 	if l == 0 {
 		return nil
@@ -169,7 +172,7 @@ func (r RouteMatch) Resource() *resource.Resource {
 //
 // If this method returns a non nil value, it means the route is an item request,
 // otherwise it's a collection request.
-func (r RouteMatch) ResourceID() interface{} {
+func (r *RouteMatch) ResourceID() interface{} {
 	l := len(r.ResourcePath)
 	if l == 0 {
 		return nil
@@ -178,22 +181,23 @@ func (r RouteMatch) ResourceID() interface{} {
 }
 
 // Lookup builds a Lookup object from the matched route
-func (r RouteMatch) Lookup() (*resource.Lookup, *Error) {
+func (r *RouteMatch) Lookup() (*resource.Lookup, *Error) {
 	l := resource.NewLookup()
 	// Append route fields to the query
 	for _, rp := range r.ResourcePath {
 		if rp.Value != nil {
-			l.AddQuery(schema.Query{schema.Equal{Field: rp.Field, Value: rp.Value}})
+			l.AddQuery(query.Query{query.Equal{Field: rp.Field, Value: rp.Value}})
 		}
 	}
-	// Parse query string params
+	// Parse query string params.
 	if sort := r.Params.Get("sort"); sort != "" {
 		if err := l.SetSort(sort, r.Resource().Validator()); err != nil {
-			return nil, &Error{422, fmt.Sprintf("Invalid `sort` paramter: %s", err), nil}
+			return nil, &Error{422, fmt.Sprintf("Invalid `sort` parameter: %s", err), nil}
 		}
 	}
 	if filters, found := r.Params["filter"]; found {
-		// If several filter parameters are present, merge them using $and (see lookup.addFilter)
+		// If several filter parameters are present, merge them using $and
+		// (see lookup.addFilter).
 		for _, filter := range filters {
 			if err := l.AddFilter(filter, r.Resource().Validator()); err != nil {
 				return nil, &Error{422, fmt.Sprintf("Invalid `filter` parameter: %s", err), nil}
@@ -202,14 +206,14 @@ func (r RouteMatch) Lookup() (*resource.Lookup, *Error) {
 	}
 	if fields := r.Params.Get("fields"); fields != "" {
 		if err := l.SetSelector(fields, r.Resource().Validator()); err != nil {
-			return nil, &Error{422, fmt.Sprintf("Invalid `fields` paramter: %s", err), nil}
+			return nil, &Error{422, fmt.Sprintf("Invalid `fields` parameter: %s", err), nil}
 		}
 	}
 	return l, nil
 }
 
-// Release releases the route so it can be reused
-func (r RouteMatch) Release() {
+// Release releases the route so it can be reused.
+func (r *RouteMatch) Release() {
 	r.Params = nil
 	r.Method = ""
 	r.ResourcePath.clear()
