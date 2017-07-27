@@ -1,29 +1,28 @@
 package jsonschema
 
-import "github.com/rs/rest-layer/schema"
+import (
+	"io"
+	"strconv"
 
-type arrayBuilder schema.Array
+	"github.com/rs/rest-layer/schema"
+)
 
-func (v arrayBuilder) BuildJSONSchema() (map[string]interface{}, error) {
-	m := map[string]interface{}{
-		"type": "array",
-	}
+func encodeArray(w io.Writer, v *schema.Array) error {
+	ew := errWriter{w: w}
+
+	ew.writeString(`"type": "array"`)
 	if v.MinLen > 0 {
-		m["minItems"] = v.MinLen
+		ew.writeFormat(`, "minItems": %s`, strconv.FormatInt(int64(v.MinLen), 10))
 	}
 	if v.MaxLen > 0 {
-		m["maxItems"] = v.MaxLen
+		ew.writeFormat(`, "maxItems": %s`, strconv.FormatInt(int64(v.MaxLen), 10))
 	}
 	if v.ValuesValidator != nil {
-		builder, err := ValidatorBuilder(v.ValuesValidator)
-		if err != nil {
-			return nil, err
+		ew.writeString(`, "items": {`)
+		if ew.err == nil {
+			ew.err = encodeValidator(w, v.ValuesValidator)
 		}
-		items, err := builder.BuildJSONSchema()
-		if err != nil {
-			return nil, err
-		}
-		m["items"] = items
+		ew.writeString("}")
 	}
-	return m, nil
+	return ew.err
 }

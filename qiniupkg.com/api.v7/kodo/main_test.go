@@ -2,11 +2,8 @@ package kodo
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
-	"strconv"
 	"testing"
-	"time"
 )
 
 var (
@@ -28,11 +25,6 @@ func init() {
 	if skipTest() {
 		return
 	}
-	rand.Seed(time.Now().UnixNano())
-	key += strconv.Itoa(rand.Int())
-	keyFetch += strconv.Itoa(rand.Int())
-	newkey1 += strconv.Itoa(rand.Int())
-	newkey2 += strconv.Itoa(rand.Int())
 	bucket.BatchDelete(nil, key, keyFetch, newkey1, newkey2)
 }
 
@@ -56,7 +48,7 @@ func newBucket() (bucket Bucket) {
 	if bucketName == "" || domain == "" {
 		panic("require test env")
 	}
-	client = NewWithoutZone(nil)
+	client = New(0, nil)
 
 	return client.Bucket(bucketName)
 }

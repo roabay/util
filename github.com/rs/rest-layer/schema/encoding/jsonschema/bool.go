@@ -1,9 +1,13 @@
 package jsonschema
 
-import "github.com/rs/rest-layer/schema"
+import (
+	"io"
 
-type boolBuilder schema.Bool
+	"github.com/rs/rest-layer/schema"
+)
 
-func (v boolBuilder) BuildJSONSchema() (map[string]interface{}, error) {
-	return map[string]interface{}{"type": "boolean"}, nil
+func encodeBool(w io.Writer, v *schema.Bool) error {
+	ew := errWriter{w: w}
+	ew.writeString(`"type": "boolean"`)
+	return ew.err
 }

@@ -14,20 +14,18 @@ func ExampleEncoder() {
 	s := schema.Schema{
 		Fields: schema.Fields{
 			"foo": schema.Field{
-				Required:  true,
+				Required: true,
+				// NOTE: Min is currently encoded as '0E+00', not '0'.
 				Validator: &schema.Float{Boundaries: &schema.Boundaries{Min: 0, Max: math.Inf(1)}},
 			},
 			"bar": schema.Field{
 				Validator: &schema.Integer{},
 			},
 			"baz": schema.Field{
-				Description: "baz can not be set by the user",
-				ReadOnly:    true,
-				Validator:   &schema.String{MaxLen: 42},
+				ReadOnly:  true,
+				Validator: &schema.String{MaxLen: 42},
 			},
-			"foobar": schema.Field{
-				Description: "foobar can hold any valid JSON value",
-			},
+			"foobar": schema.Field{},
 		},
 	}
 	b := new(bytes.Buffer)
@@ -37,28 +35,25 @@ func ExampleEncoder() {
 	json.Indent(b2, b.Bytes(), "", "| ")
 	fmt.Println(b2)
 	// Output: {
+	// | "type": "object",
 	// | "additionalProperties": false,
 	// | "properties": {
 	// | | "bar": {
 	// | | | "type": "integer"
 	// | | },
 	// | | "baz": {
-	// | | | "description": "baz can not be set by the user",
-	// | | | "maxLength": 42,
 	// | | | "readOnly": true,
-	// | | | "type": "string"
+	// | | | "type": "string",
+	// | | | "maxLength": 42
 	// | | },
 	// | | "foo": {
-	// | | | "minimum": 0,
-	// | | | "type": "number"
+	// | | | "type": "number",
+	// | | | "minimum": 0E+00
 	// | | },
-	// | | "foobar": {
-	// | | | "description": "foobar can hold any valid JSON value"
-	// | | }
+	// | | "foobar": {}
 	// | },
 	// | "required": [
 	// | | "foo"
-	// | ],
-	// | "type": "object"
+	// | ]
 	// }
 }

@@ -1,19 +1,26 @@
 package jsonschema
 
-import "github.com/rs/rest-layer/schema"
+import (
+	"io"
+	"strconv"
+	"strings"
 
-type integerBuilder schema.Integer
+	"github.com/rs/rest-layer/schema"
+)
 
-func (v integerBuilder) BuildJSONSchema() (map[string]interface{}, error) {
-	m := map[string]interface{}{
-		"type": "integer",
-	}
+func encodeInteger(w io.Writer, v *schema.Integer) error {
+	ew := errWriter{w: w}
 
+	ew.writeString(`"type": "integer"`)
 	if len(v.Allowed) > 0 {
-		m["enum"] = v.Allowed
+		var allowed []string
+		for _, value := range v.Allowed {
+			allowed = append(allowed, strconv.FormatInt(int64(value), 10))
+		}
+		ew.writeFormat(`, "enum": [%s]`, strings.Join(allowed, ","))
 	}
-	if v.Boundaries != nil {
-		addBoundariesProperties(m, v.Boundaries)
+	if ew.err == nil {
+		ew.err = boundariesToJSONSchema(w, v.Boundaries)
 	}
-	return m, nil
+	return ew.err
 }

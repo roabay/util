@@ -3,7 +3,6 @@ package kodocli
 import (
 	"net/http"
 
-	"qiniupkg.com/api.v7/api"
 	"qiniupkg.com/api.v7/conf"
 	"qiniupkg.com/x/rpc.v7"
 	"qiniupkg.com/x/url.v7"
@@ -32,20 +31,6 @@ var zones = []zoneConfig{
 			"-H up-z1.qiniu.com http://106.38.227.27",
 		},
 	},
-	// z2 华南机房:
-	{
-		UpHosts: []string{
-			"http://up-z2.qiniu.com",
-			"http://upload-z2.qiniu.com",
-		},
-	},
-	// na0 北美机房:
-	{
-		UpHosts: []string{
-			"http://up-na0.qiniu.com",
-			"http://upload-na0.qiniu.com",
-		},
-	},
 }
 
 // ----------------------------------------------------------
@@ -53,15 +38,11 @@ var zones = []zoneConfig{
 type UploadConfig struct {
 	UpHosts   []string
 	Transport http.RoundTripper
-
-	APIHost string
-	Scheme  string
 }
 
 type Uploader struct {
 	Conn    rpc.Client
 	UpHosts []string
-	ApiCli  *api.Client
 }
 
 func NewUploader(zone int, cfg *UploadConfig) (p Uploader) {
@@ -70,26 +51,16 @@ func NewUploader(zone int, cfg *UploadConfig) (p Uploader) {
 	if cfg != nil {
 		uc = *cfg
 	}
-	if uc.Scheme != "https" {
-		uc.Scheme = "http"
-	}
-	if uc.APIHost == "" {
-		uc.APIHost = api.DefaultApiHost
-	}
 	if len(uc.UpHosts) == 0 {
-		if zone > 0 && zone < len(zones) {
-			uc.UpHosts = zones[zone].UpHosts
+		if zone < 0 || zone >= len(zones) {
+			panic("invalid upload config: invalid zone")
 		}
+		uc.UpHosts = zones[zone].UpHosts
 	}
 
 	p.UpHosts = uc.UpHosts
 	p.Conn.Client = &http.Client{Transport: uc.Transport}
-	p.ApiCli = api.NewClient(uc.APIHost, uc.Scheme)
 	return
-}
-
-func NewUploaderWithoutZone(cfg *UploadConfig) (p Uploader) {
-	return NewUploader(-1, cfg)
 }
 
 // ----------------------------------------------------------
@@ -112,3 +83,4 @@ func SetAppName(userApp string) error {
 }
 
 // ----------------------------------------------------------
+

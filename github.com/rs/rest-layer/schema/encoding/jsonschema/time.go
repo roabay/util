@@ -1,12 +1,13 @@
 package jsonschema
 
-import "github.com/rs/rest-layer/schema"
+import (
+	"io"
 
-type timeBuilder schema.Time
+	"github.com/rs/rest-layer/schema"
+)
 
-func (v timeBuilder) BuildJSONSchema() (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"type":   "string",
-		"format": "date-time",
-	}, nil
+func encodeTime(w io.Writer, v *schema.Time) error {
+	ew := errWriter{w: w}
+	ew.writeString(`"type": "string", "format": "date-time"`)
+	return ew.err
 }

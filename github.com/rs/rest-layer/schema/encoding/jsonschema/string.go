@@ -1,25 +1,32 @@
 package jsonschema
 
-import "github.com/rs/rest-layer/schema"
+import (
+	"fmt"
+	"io"
+	"strconv"
+	"strings"
 
-type stringBuilder schema.String
+	"github.com/rs/rest-layer/schema"
+)
 
-func (v stringBuilder) BuildJSONSchema() (map[string]interface{}, error) {
-	m := map[string]interface{}{
-		"type": "string",
-	}
-
+func encodeString(w io.Writer, v *schema.String) error {
+	ew := errWriter{w: w}
+	ew.writeString(`"type": "string"`)
 	if v.Regexp != "" {
-		m["pattern"] = v.Regexp
+		ew.writeFormat(`, "pattern": %q`, v.Regexp)
 	}
 	if len(v.Allowed) > 0 {
-		m["enum"] = v.Allowed
+		var allowed []string
+		for _, value := range v.Allowed {
+			allowed = append(allowed, fmt.Sprintf("%q", value))
+		}
+		ew.writeFormat(`, "enum": [%s]`, strings.Join(allowed, ", "))
 	}
 	if v.MinLen > 0 {
-		m["minLength"] = v.MinLen
+		ew.writeFormat(`, "minLength": %s`, strconv.FormatInt(int64(v.MinLen), 10))
 	}
 	if v.MaxLen > 0 {
-		m["maxLength"] = v.MaxLen
+		ew.writeFormat(`, "maxLength": %s`, strconv.FormatInt(int64(v.MaxLen), 10))
 	}
-	return m, nil
+	return ew.err
 }

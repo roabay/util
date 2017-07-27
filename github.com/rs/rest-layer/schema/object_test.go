@@ -1,21 +1,10 @@
 package schema
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-type uncompilableValidator struct{}
-
-func (v uncompilableValidator) Compile() error {
-	return errors.New("compilation failed")
-}
-
-func (v uncompilableValidator) Validate(value interface{}) (interface{}, error) {
-	return value, nil
-}
 
 func TestInvalidObjectValidatorCompile(t *testing.T) {
 	v := &Object{}
@@ -36,27 +25,13 @@ func TestObjectWithSchemaValidatorCompile(t *testing.T) {
 		Schema: &Schema{
 			Fields: Fields{
 				"test": Field{
-					Validator: &String{},
+					Validator: String{},
 				},
 			},
 		},
 	}
 	err := v.Compile()
 	assert.NoError(t, err)
-}
-
-func TestObjectWithSchemaValidatorCompileError(t *testing.T) {
-	v := &Object{
-		Schema: &Schema{
-			Fields: Fields{
-				"foo": Field{
-					Validator: &uncompilableValidator{},
-				},
-			},
-		},
-	}
-	err := v.Compile()
-	assert.EqualError(t, err, "foo: compilation failed")
 }
 
 func TestObjectValidator(t *testing.T) {
@@ -66,12 +41,11 @@ func TestObjectValidator(t *testing.T) {
 		Schema: &Schema{
 			Fields: Fields{
 				"test": Field{
-					Validator: &String{},
+					Validator: String{},
 				},
 			},
 		},
 	}
-	assert.NoError(t, v.Compile())
 	doc, err := v.Validate(obj)
 	assert.NoError(t, err)
 	assert.Equal(t, obj, doc)
@@ -84,12 +58,11 @@ func TestInvalidObjectValidator(t *testing.T) {
 		Schema: &Schema{
 			Fields: Fields{
 				"test": Field{
-					Validator: &String{},
+					Validator: String{},
 				},
 			},
 		},
 	}
-	assert.NoError(t, v.Compile())
 	_, err := v.Validate(obj)
 	assert.Error(t, err)
 }
@@ -101,12 +74,11 @@ func TestErrorObjectCast(t *testing.T) {
 		Schema: &Schema{
 			Fields: Fields{
 				"test": Field{
-					Validator: &String{},
+					Validator: String{},
 				},
 			},
 		},
 	}
-	assert.NoError(t, v.Compile())
 	_, err := v.Validate(obj)
 	switch errMap := err.(type) {
 	case ErrorMap:
@@ -126,14 +98,13 @@ func TestArrayOfObject(t *testing.T) {
 		Schema: &Schema{
 			Fields: Fields{
 				"test": Field{
-					Validator: &String{},
+					Validator: String{},
 				},
 			},
 		},
 	}
 	array := Array{ValuesValidator: value}
 	a := []interface{}{obj, objb}
-	assert.NoError(t, array.Compile())
 	_, err := array.Validate(a)
 	assert.NoError(t, err)
 }
@@ -147,14 +118,13 @@ func TestErrorArrayOfObject(t *testing.T) {
 		Schema: &Schema{
 			Fields: Fields{
 				"test": Field{
-					Validator: &String{},
+					Validator: String{},
 				},
 			},
 		},
 	}
 	array := Array{ValuesValidator: value}
 	a := []interface{}{obj, objb}
-	assert.NoError(t, array.Compile())
 	_, err := array.Validate(a)
 	assert.Error(t, err)
 }
@@ -166,12 +136,11 @@ func TestErrorBasicMessage(t *testing.T) {
 		Schema: &Schema{
 			Fields: Fields{
 				"test": Field{
-					Validator: &String{},
+					Validator: String{},
 				},
 			},
 		},
 	}
-	assert.NoError(t, v.Compile())
 	_, err := v.Validate(obj)
 	errMap, ok := err.(ErrorMap)
 	assert.True(t, ok)
@@ -187,15 +156,15 @@ func Test2ErrorFieldMessages(t *testing.T) {
 		Schema: &Schema{
 			Fields: Fields{
 				"test": Field{
-					Validator: &String{},
+					Validator: String{},
 				},
 				"count": Field{
-					Validator: &Integer{},
+					Validator: Integer{},
 				},
 			},
 		},
 	}
-	assert.NoError(t, v.Compile())
+	v.Compile()
 	_, err := v.Validate(obj)
 	errMap, ok := err.(ErrorMap)
 	assert.True(t, ok)
@@ -211,15 +180,15 @@ func TestErrorMessagesForObjectValidatorEmbeddedInArray(t *testing.T) {
 		Schema: &Schema{
 			Fields: Fields{
 				"test": Field{
-					Validator: &String{},
+					Validator: String{},
 				},
 				"isUp": Field{
-					Validator: &Bool{},
+					Validator: Bool{},
 				},
 			},
 		},
 	}
-	assert.NoError(t, value.Compile())
+	value.Compile()
 
 	array := Array{ValuesValidator: value}
 

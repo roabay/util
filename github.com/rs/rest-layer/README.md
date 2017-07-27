@@ -823,38 +823,13 @@ The opposite `$nin` is also available.
 
 The following numeric comparisons operators are supported: `$lt`, `$lte`, `$gt`, `$gte`.
 
-The `$exists` operator matches documents containing the field, even if this field is `null`
+The `$exists` operator matches document containing the field, even if this field is `null`
 
 ```json
 {"type": {"$exists": true}}
 ```
 
 You can invert the operator by passing `false`.
-
-There is also a `$regex` operator that matches documents containing the field given as a regular expression. In general, the syntax of the regular expressions accepted is the same general syntax used by Perl, Python, and other languages.
-More precisely, it is the syntax accepted by RE2 and described at https://golang.org/s/re2syntax, except for \C.
-
-Flags are supported for more control over regular expressions. Flag syntax is xyz (set) or -xyz (clear) or xy-z (set xy, clear z).
-The flags are:
-i              case-insensitive (default false)
-m              multi-line mode: ^ and $ match begin/end line in addition to begin/end text (default false)
-s              let . match \n (default false)
-U              ungreedy: swap meaning of x* and x*?, x+ and x+?, etc (default false)
-
-For example the following regular expression would match any document with a field `type` and its value `rest-layer`.
-
-```json
-{"type": {"$regex": "re[s]{1}t-la.+r"}}
-```
-
-The same example with flags:
-
-```json
-{"type": {"$regex": "(?i)re[s]{1}t-LAYER"}}
-```
-
-However, keep in mind that Storers have to support regular expression and depending on the implementation of the storage handler the accepted syntax may vary.
-An error of `ErrNotImplemented` will be returned for those storage backends which do not support the `$regex` operator.
 
 ### Filter operators
 
@@ -868,7 +843,6 @@ An error of `ErrNotImplemented` will be returned for those storage backends whic
 | `$gt`     | `{"a": {"$gt": 10}}`                | Fields value is greater than specified number.
 | `$gte`    | `{"a": {"$gte": 10}}`               | Fields value is greater than or equal to the specified number.
 | `$exists` | `{"a": {"$exists": true}}`          | Match if the field is present (or not if set to `false`) in the item, event if `nil`.
-| `$regex`  | `{"a": {"$regex": "fo[o]{1}"}}`     | Match regular expression on a field's value.
 
 *Some storage handlers may not support all operators. Refer to the storage handler's documentation for more info.*
 
@@ -1412,11 +1386,11 @@ func (r myResponseFormatter) FormatList(ctx context.Context, headers http.Header
 
 ## GraphQL
 
-In parallel with the REST API handler, REST Layer is also able to handle GraphQL queries (mutation will come later). GraphQL is a query language created by Facebook which provides a common interface to fetch and manipulate data. REST Layer's GraphQL handler is able to read a [resource.Index](https://godoc.org/github.com/rs/rest-layer/resource#Index) and create a corresponding GraphQL schema.
+In parallel of the REST API handler, REST Layer is also able to handle GraphQL queries (mutation will come later). GraphQL is a query language created by Facebook which provides a common interface fetch and manipulate data. REST Layer's GraphQL handler is able to read a [resource.Index](https://godoc.org/github.com/rs/rest-layer/resource#Index) and create a corresponding GraphQL schema.
 
-GraphQL doesn't expose resources directly, but queries. REST Layer take all the resources defined at the root of the `resource.Index` and create two GraphQL queries for each one. One query is just the name of the endpoint, so `/users` would result in `users` and another is the name of the endpoint suffixed with `List`, as `usersList`. The item queries takes an `id` parameter and the list queries take `skip`, `page`, `limit`, `filter` and `sort` parameters. All sub-resources are accessible using GraphQL sub-selection syntax.
+GraphQL doesn't expose resources directly, but queries. REST Layer take all the resources defined at the root of the `resource.Index` and create two GraphQL queries for each one. On query is just the name of the endpoint, so `/users` would result in `users` and another is the name of the endpoint suffixed with `List`, as `usersList`. The item queries takes an `id` parameter and the list queries take `skip`, `page`, `limit`, `filter` and `sort` parameters. All sub-resources are accessible using GraphQL sub-selection syntax.
 
-If your resource defines aliases, some additional GraphQL queries are exposed with their name constructed as the name of the resource suffixed with the name of the alias with a capital. So for `users` with an alias `admin`, the query would be `usersAdmin`.
+If you resource defines aliases, some additional GraphQL queris are exposes with their name constructed as the name of the resource suffixed with the name of the alias with a capital. So for `users` with an alias `admin`, the query would be `usersAdmin`.
 
 You can bind the GraphQL endpoint wherever you want as follow:
 
@@ -1459,76 +1433,37 @@ See [Hystrix godoc](https://godoc.org/github.com/afex/hystrix-go/hystrix) for mo
 
 ## JSONSchema
 
-It is possible to convert a schema to [JSON Schema](http://json-schema.org/) with some limitations for certain schema fields. Currently, we implement JSON Schema Draft 4 [core](https://tools.ietf.org/html/draft-zyp-json-schema-04) and [validation](https://tools.ietf.org/html/draft-fge-json-schema-validation-00) specifications. In addition, we have implemented "readOnly" from the less commonly used [hyper-schema](https://tools.ietf.org/html/draft-luff-json-hyper-schema-00#section-4.4) specification.
-
-Example usage:
+An incomplete but stil useful JSONSchema implementation that covers many common use cases for Schema. Goal is to try and match the draft-04 spec. Patches welcome.
 
 ```go
 import "github.com/rs/rest-layer/schema/jsonschema"
 
 b := new(bytes.Buffer)
 enc := jsonschema.NewEncoder(b)
-if err := enc.Encode(aSchema); err != nil {
+if err := enc.Encode(myschema); err != nil {
   return err
 }
-fmt.Println(b.String()) // Valid JSON Document describing the schema.
+fmt.Println(b.String()) // Valid JSON Document describing the schema
 ```
 
+### Supported FieldValidators
 
-### Custom FieldValidators
-
-For a custom `FieldValidator` to support encoding to JSON Schema, it must implement the `jsonschema.Builder` interface:
-
-```go
-// The Builder interface should be implemented by custom schema.FieldValidator implementations to allow JSON Schema
-// serialization.
-type Builder interface {
-	// BuildJSONSchema should return a map containing JSON Schema Draft 4 properties that can be set based on
-	// FieldValidator data. Application specific properties can be added as well, but should not conflict with any
-	// legal JSON Schema keys.
-	BuildJSONSchema() (map[string]interface{}, error)
-}
-```
-
-To easier extend a `FieldValidator` from the `schema` package, you can call `ValidatorBuilder` inside `BuildJSONSchem()`:
-
-```go
-type Email struct {
-	schema.String
-}
-
-func (e Email) BuildJSONSchema() (map[string]interface{}, error) {
-	parentBuilder, _ = jsonschema.ValidatorBuilder(e.String)
-	m, err := parentBuilder.BuildJSONSchema()
-	if err != nil {
-		return nil, err
-	}
-	m["format"] = "email"
-	return m, nil
-}
-```
-
-### Sub-schema Limitation
-
-Sub-schemas only get converted to JSON Schema, if you specify a sub-schema via setting a Field's `Validator` attribute to a `schema.Object` instance. Use of the Field's `Schema` field is _not_ supported. Instead we hope [#77](https://github.com/rs/rest-layer/issues/77) will be implemented.
-
-### schema.Dict Limitations
-
-`schema.Dict` only support `nil` and `schema.String` as `KeysValidator` values. Note that some less common combinations of `schema.String` attributes will lead to usage of an `allOf` construct with duplicated schemas for values. This is to avoid usage of regular expression expansions that only a subset of implementations actually support.
-
-The limitation in `KeysValidator` values arise because JSON Schema draft 4 (and draft 5) support for key validation is limited to [properties, patternProperties and additionalProperties](https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.4.4). This essentially means that there can be no JSON Schema object supplied for key validation, but that we need to rely on exact match (properties), regular expressions (patternProperties) or no key validation (additionalProperties).
-
-### schema.Reference Provisional Support
-
-The support for `schema.Reference` is purely provisional, and simply returns an empty object `{}`, meaning it does not give any hint as to which validation the server might use.
-
-With a potential later implantation of the [OpenAPI Specification](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md) (a.k.a. the Swagger 2.0 Specification), the goal is to refer to the ID field of the linked resource via an object `{"$ref": "#/definitions/<unique schema title>/id"}`. This is tracked via issue [#36](https://github.com/rs/rest-layer/issues/36).
-
-### schema.URL Limitations
-
-The current serialization of `schema.URL` always returns a schema `{"type": "string", "format": "uri"}`, ignoring any struct attributes that affect the actual validation within rest-layer. The JSON Schema is thus not completely accurate for this validator.
-
-Note that JSON Schema draft 5 adds [uriref](https://tools.ietf.org/html/draft-wright-json-schema-validation-00#section-7.3.7), which could allow us to at least document whether `AllowRelative` is `true` or `false`. JSON Schema also allow application specific additional formats to be defined, but it's not practical to create a custom format for any possible struct attribute combination.
+ - [x] schema.Schema
+ - [x] schema.Bool
+ - [ ] schema.Null
+ - [x] schema.Float
+ - [x] schema.Integer
+ - [x] schema.String
+ - [x] schema.Time
+ - [ ] schema.URL
+ - [ ] schema.IP
+ - [ ] schema.Password
+ - [x] schema.Array
+ - [x] schema.Object
+ - [ ] schema.Dict
+ - [ ] schema.AllOf
+ - [ ] schema.AnyOf
+ - [ ] Custom validators
 
 ## Licenses
 
