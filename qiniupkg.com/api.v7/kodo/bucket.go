@@ -2,11 +2,14 @@ package kodo
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io"
 	"net/url"
 	"strconv"
 
 	. "golang.org/x/net/context"
+	"qiniupkg.com/api.v7/api"
+	"qiniupkg.com/x/log.v7"
 )
 
 // ----------------------------------------------------------
@@ -21,6 +24,7 @@ func (p *Client) Batch(ctx Context, ret interface{}, op []string) (err error) {
 // ----------------------------------------------------------
 
 type Bucket struct {
+	api.BucketInfo
 	Conn *Client
 	Name string
 }
@@ -30,8 +34,26 @@ type Bucket struct {
 // name 是创建该七牛空间（bucket）时采用的名称。
 //
 func (p *Client) Bucket(name string) Bucket {
+	b, err := p.BucketWithSafe(name)
+	if err != nil {
+		log.Errorf("Bucket(%s) failed: %+v", name, err)
+	}
+	return b
+}
 
-	return Bucket{p, name}
+func (p *Client) BucketWithSafe(name string) (Bucket, error) {
+	var info api.BucketInfo
+	if len(p.UpHosts) == 0 {
+		var err error
+		info, err = p.apiCli.GetBucketInfo(p.mac.AccessKey, name)
+		if err != nil {
+			return Bucket{}, err
+		}
+	} else {
+		info.IoHost = p.IoHost
+		info.UpHosts = p.UpHosts
+	}
+	return Bucket{info, p, name}, nil
 }
 
 type Entry struct {
@@ -39,6 +61,7 @@ type Entry struct {
 	Fsize    int64  `json:"fsize"`
 	PutTime  int64  `json:"putTime"`
 	MimeType string `json:"mimeType"`
+	Type     int    `json:"type"`
 	EndUser  string `json:"endUser"`
 }
 
@@ -102,6 +125,16 @@ func (p Bucket) ChangeMime(ctx Context, key, mime string) (err error) {
 	return p.Conn.Call(ctx, nil, "POST", p.Conn.RSHost+URIChangeMime(p.Name, key, mime))
 }
 
+// 修改文件的存储类型。
+//
+// ctx      是请求的上下文。
+// key      是要修改的文件的访问路径。
+// fileType 是要设置的新存储类型。
+//
+func (p Bucket) ChangeType(ctx Context, key string, fileType int) (err error) {
+	return p.Conn.Call(ctx, nil, "POST", p.Conn.RSHost+URIChangeType(p.Name, key, fileType))
+}
+
 // 从网上抓取一个资源并存储到七牛空间（bucket）中。
 //
 // ctx 是请求的上下文。
@@ -109,7 +142,17 @@ func (p Bucket) ChangeMime(ctx Context, key, mime string) (err error) {
 // url 是要抓取的资源的URL。
 //
 func (p Bucket) Fetch(ctx Context, key string, url string) (err error) {
-	return p.Conn.Call(ctx, nil, "POST", p.Conn.IoHost+uriFetch(p.Name, key, url))
+	return p.Conn.Call(ctx, nil, "POST", p.IoHost+uriFetch(p.Name, key, url))
+}
+
+// 更新文件生命周期
+//
+// ctx 是请求的上下文。
+// key 是要更新的文件的访问路径。
+// deleteAfterDays 设置为0表示取消 lifecycle
+//
+func (p Bucket) DeleteAfterDays(ctx Context, key string, days int) (err error) {
+	return p.Conn.Call(ctx, nil, "POST", p.Conn.RSHost+URIDeleteAfterDays(p.Name, key, days))
 }
 
 // ----------------------------------------------------------
@@ -252,6 +295,14 @@ func URIMove(bucketSrc, keySrc, bucketDest, keyDest string) string {
 
 func URIChangeMime(bucket, key, mime string) string {
 	return "/chgm/" + encodeURI(bucket+":"+key) + "/mime/" + encodeURI(mime)
+}
+
+func URIChangeType(bucket, key string, fileType int) string {
+	return "/chtype/" + encodeURI(bucket+":"+key) + "/type/" + strconv.Itoa(fileType)
+}
+
+func URIDeleteAfterDays(bucket, key string, days int) string {
+	return fmt.Sprintf("/deleteAfterDays/%s/%d", encodeURI(bucket+":"+key), days)
 }
 
 // ----------------------------------------------------------
