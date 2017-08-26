@@ -136,6 +136,10 @@ func LoggerWithConfig(config LoggerConfig) echo.MiddlewareFunc {
 					return buf.WriteString(c.RealIP())
 				case "region":
 					return buf.WriteString(c.Get("Region").(string))
+				case "city":
+					return buf.WriteString(c.Get("City").(string))
+				case "isp":
+					return buf.WriteString(c.Get("ISP").(string))
 				case "host":
 					return buf.WriteString(req.Host)
 				case "uri":
